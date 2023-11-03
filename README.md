@@ -1,27 +1,59 @@
-| :memo: | There is a matching reproducer for the Groovy DSL [here](https://github.com/gradle/gradle-issue-reproducer/tree/groovy-dsl) |
-|---|---|
+Unresolvable Capability Conflict Reproducer Project
+----------------------------------------------------
 
-# Gradle issue reproducer
+This project reproduces the following problem with the Gradle build tool:
 
-This is template repository to create reproducer projects for Gradle issues.
-The template contains a GitHub Action definition that runs a Gradle build upon each code change.
-To quickly learn how it works check the following screencast:
+If all of the following conditions are true...
 
-https://user-images.githubusercontent.com/419883/147940456-d0c96c90-f2b5-4574-8133-09647db9545a.mov
+  1. the build's dependency tree contains multiple dependencies that declare the same capability (capability conflict)
+  2. the build contains a capability selection rule to resolve the conflict
+  3. the build is configured to fail on version conflicts (by calling `resolutionStrategy.failOnVersionConflict()`)
+  
+...then the capability conflict fails to resolve and the build fails.
 
-## How to use the template
+To see the build failure, run:
 
-- Fork this repository
-  - On the main page click the `Use this Template` button
-  - Specify the user/org name and a repository name
-  - Select `Public` for repository type
-  - Select `Include all branches`
-  - Click `Create Repositorty from template`
-- Modify the project in the repository to reproduce the issue
-  - You can clone your new forked repository locally and push changes, as usual
-  - You can also edit your reprocer in an online editor by replacing `github.com` with `github.dev` in the URL (or by pressing the '.' key on the keyboard).
-- Adjust the [GitHub Action file](.github/workflows/run-reproducer.yml)
-  - You can configure the executed Gradle tasks as well as the environment (task options, log level, JVM version, operating system, etc)
-  - The documentation for the Gradle GitHub Action is available [here](https://github.com/gradle/gradle-build-action)
-- Verify that the reproducer exhibits the problem on the [GitHub Action page](https://github.com/gradle/gradle-issue-reproducer/actions)
-- Link your reproducer to the issue
+```
+./gradlew build
+```
+
+This will result in output similar to:
+
+```
+Calculating task graph as no configuration cache is available for tasks: build
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Configuration cache state could not be cached: field `classpath` of task `:compileJava` of type `org.gradle.api.tasks.compile.JavaCompile`: error writing value of type 'org.gradle.api.internal.artifacts.configurations.DefaultUnlockedConfiguration'
+> Could not resolve all dependencies for configuration ':compileClasspath'.
+   > Conflict found for the following module:
+       - org.hamcrest:hamcrest On capability org.hamcrest:hamcrest-core prefer the full hamcrest library
+
+* Try:
+> Run with :dependencyInsight --configuration compileClasspath --dependency org.hamcrest:hamcrest to get more insight on how to solve the conflict.
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 836ms
+Configuration cache entry discarded due to serialization error.
+```
+
+This project enables the configuration cache and thus all dependencies are
+resolved at configuration time. However, the use of the configuration cache is
+most likely not related to the problem that is demonstrated here.
+
+### Notes
+
+The example build adds the java-ecosystem-capabilities plugin, which adds a
+number of capabilities to common libraries that exist in the java ecosystem. It
+then adds dependencies which pull in both the full hamcrest library and the
+slimmer hamcrest-core library (which conflict with each other).
+
+The java-ecosystem-capabilities plugin defines its own dependency resolution
+rules that normally would resolve the hamcrest conflict automatically. However,
+to make the issue easier to "see and understand", this project disables the
+default java-ecosystem-capabilities plugin's dependency resolution rules and
+explicitly adds capability selection rules for hamcrest.
+
